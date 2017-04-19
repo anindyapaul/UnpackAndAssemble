@@ -4,76 +4,11 @@
 #include <stdlib.h>
 #include <tchar.h>
 #include <psapi.h>
+#include <excpt.h>
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "psapi.lib")
 using namespace std;
-
-void PrintMemoryInfo( DWORD processID )
-{
-    HANDLE hProcess;
-    PROCESS_MEMORY_COUNTERS pmc;
-
-    // Print the process identifier.
-
-    printf( "\nProcess ID: %u\n", processID );
-
-    // Print information about the memory usage of the process.
-
-    hProcess = OpenProcess(  PROCESS_QUERY_INFORMATION |
-                                    PROCESS_VM_READ,
-                                    FALSE, processID );
-    if (NULL == hProcess)
-        return;
-
-    if ( GetProcessMemoryInfo( hProcess, &pmc, sizeof(pmc)) )
-    {
-        printf( "\tPageFaultCount: 0x%08X\n", pmc.PageFaultCount );
-        printf( "\tPeakWorkingSetSize: 0x%08X\n", 
-                  pmc.PeakWorkingSetSize );
-        printf( "\tWorkingSetSize: 0x%08X\n", pmc.WorkingSetSize );
-        printf( "\tQuotaPeakPagedPoolUsage: 0x%08X\n", 
-                  pmc.QuotaPeakPagedPoolUsage );
-        printf( "\tQuotaPagedPoolUsage: 0x%08X\n", 
-                  pmc.QuotaPagedPoolUsage );
-        printf( "\tQuotaPeakNonPagedPoolUsage: 0x%08X\n", 
-                  pmc.QuotaPeakNonPagedPoolUsage );
-        printf( "\tQuotaNonPagedPoolUsage: 0x%08X\n", 
-                  pmc.QuotaNonPagedPoolUsage );
-        printf( "\tPagefileUsage: 0x%08X\n", pmc.PagefileUsage ); 
-        printf( "\tPeakPagefileUsage: 0x%08X\n", 
-                  pmc.PeakPagefileUsage );
-    }
-
-    CloseHandle( hProcess );
-}
-
-void GetListofProcessIdentifiers( )
-{
-
-    DWORD aProcesses[1024]; 
-    DWORD cbNeeded; 
-    DWORD cProcesses;
-    unsigned int i;
-	
-    // Get the list of process identifiers.
-
-    if ( !EnumProcesses( aProcesses, sizeof(aProcesses), &cbNeeded ) )
-        return ;
-
-    // Calculate how many process identifiers were returned.
-
-    cProcesses = cbNeeded / sizeof(DWORD);
-
-    // Print the names of the modules for each process.
-
-    for ( i = 0; i < cProcesses; i++ )
-    {
-        PrintMemoryInfo( aProcesses[i] );
-    }
-
-    return;
-}
-
+//using namespace System;
 
 void getSystemInfoExample()
 {
@@ -239,16 +174,266 @@ void virtualAllocExample(){
   return;
 }
 
-int main()
+// exceptionExample 1
+
+DWORD FilterFunction() 
+{ 
+    printf("1 ");                     // printed first 
+    return EXCEPTION_EXECUTE_HANDLER; 
+}
+
+void exceptionExample(){
+__try 
+    { 
+        __try 
+        { 
+            RaiseException( 
+                1,                    // exception code 
+                0,                    // continuable exception 
+                0, NULL);             // no arguments 
+        } 
+        __finally 
+        { 
+            printf("2 ");             // this is printed second 
+        } 
+    } 
+    __except ( FilterFunction() ) 
+    { 
+        printf("3\n");                // this is printed last 
+    } 
+
+
+}
+
+//exception example 2
+
+int k;
+int filter(unsigned int code, struct _EXCEPTION_POINTERS *ep) {
+puts("in filter.");
+if (code == EXCEPTION_ACCESS_VIOLATION) {   // if due to page permission, let OS solves problem
+puts("caught AV as expected.");
+return EXCEPTION_CONTINUE_SEARCH;
+}
+else if (code == STATUS_INTEGER_DIVIDE_BY_ZERO){
+puts("division with 0");
+k=0;
+return EXCEPTION_EXECUTE_HANDLER;// exception function written by user -> used if exception is due to WxorE policy
+}
+else{
+puts("didn't catch AV, unexpected."); // 
+return EXCEPTION_CONTINUE_EXECUTION;  // having solved the problem u can use this
+
+};
+
+}
+
+void exceptionExample2(){
+int* p = 0x00000000; // pointer to NULL
+puts("hello");
+__try{
+puts("in try");
+__try{
+puts("in try");
+//*p = 13; // causes an access violation exception;
+k=5;
+int t=0;
+k=k/t;
+}__finally{
+puts("in finally. termination: ");
+puts(AbnormalTermination() ? "\tabnormal" : "\tnormal");
+}
+}__except(filter(GetExceptionCode(), GetExceptionInformation())){
+puts("in except");
+// do something here if EXCEPTION_EXECUTE_HANDLER returns from filter
+}
+puts("world");
+
+}
+
+// Exception Example 3
+
+void ResetVars( int ) {puts("Variable Resetted");}  
+int Eval_Exception ( int n_except ) {  
+   if ( n_except != STATUS_INTEGER_DIVIDE_BY_ZERO &&   
+      n_except != STATUS_FLOAT_OVERFLOW )   // Pass on most exceptions  
+   return EXCEPTION_CONTINUE_SEARCH;  
+  
+   // Execute some code to clean up problem  
+   ResetVars( 0 );   // initializes data to 0  
+   return EXCEPTION_CONTINUE_EXECUTION;  
+}  
+
+void exceptionExample3(){
+
+	 int Eval_Exception( int );  
+  
+   __try {
+    int k=5;
+	int t=0;
+	k=k/t;
+   
+   }  
+  
+   __except ( Eval_Exception( GetExceptionCode( ))) {  
+      ;  
+   } 
+
+}
+
+
+
+void PrintMemoryInfo( DWORD processID )
 {
-shellcodeexample();
+    HANDLE hProcess;
+    PROCESS_MEMORY_COUNTERS pmc;
+
+    // Print the process identifier.
+
+    printf( "\nProcess ID: %u\n", processID );
+
+    // Print information about the memory usage of the process.
+
+    hProcess = OpenProcess(  PROCESS_QUERY_INFORMATION |
+                                    PROCESS_VM_READ,
+                                    FALSE, processID );
+    if (NULL == hProcess)
+        return;
+
+    if ( GetProcessMemoryInfo( hProcess, &pmc, sizeof(pmc)) )
+    {
+        printf( "\tPageFaultCount: 0x%08X\n", pmc.PageFaultCount );
+        printf( "\tPeakWorkingSetSize: 0x%08X\n", 
+                  pmc.PeakWorkingSetSize );
+        printf( "\tWorkingSetSize: 0x%08X\n", pmc.WorkingSetSize );
+        printf( "\tQuotaPeakPagedPoolUsage: 0x%08X\n", 
+                  pmc.QuotaPeakPagedPoolUsage );
+        printf( "\tQuotaPagedPoolUsage: 0x%08X\n", 
+                  pmc.QuotaPagedPoolUsage );
+        printf( "\tQuotaPeakNonPagedPoolUsage: 0x%08X\n", 
+                  pmc.QuotaPeakNonPagedPoolUsage );
+        printf( "\tQuotaNonPagedPoolUsage: 0x%08X\n", 
+                  pmc.QuotaNonPagedPoolUsage );
+        printf( "\tPagefileUsage: 0x%08X\n", pmc.PagefileUsage ); 
+        printf( "\tPeakPagefileUsage: 0x%08X\n", 
+                  pmc.PeakPagefileUsage );
+    }
+
+    CloseHandle( hProcess );
+}
+
+void GetListofProcessIdentifiers( )
+{
+
+    DWORD aProcesses[1024]; 
+    DWORD cbNeeded; 
+    DWORD cProcesses;
+    unsigned int i;
+	
+    // Get the list of process identifiers.
+
+    if ( !EnumProcesses( aProcesses, sizeof(aProcesses), &cbNeeded ) )
+        return ;
+
+    // Calculate how many process identifiers were returned.
+
+    cProcesses = cbNeeded / sizeof(DWORD);
+
+    // Print the names of the modules for each process.
+
+    for ( i = 0; i < cProcesses; i++ )
+    {
+        PrintMemoryInfo( aProcesses[i] );
+    }
+
+    return;
+}
+
+
+void IdentifyProcess( DWORD pid )
+{
+	PrintMemoryInfo( pid );
+    return;
+}
+ 
+
+DWORD createProcessExample(char *processName){
+	
+	STARTUPINFO si;
+    PROCESS_INFORMATION pi;
+
+    ZeroMemory( &si, sizeof(si) );
+    si.cb = sizeof(si);
+    ZeroMemory( &pi, sizeof(pi) );
+
+   // Start the child process. 
+	
+    if( !CreateProcess(NULL,   // No module name (use command line)
+        processName,        // Command line
+        NULL,           // Process handle not inheritable
+        NULL,           // Thread handle not inheritable
+        FALSE,          // Set handle inheritance to FALSE
+        0,              // No creation flags
+        NULL,           // Use parent's environment block
+        NULL,           // Use parent's starting directory 
+        &si,            // Pointer to STARTUPINFO structure
+        &pi )           // Pointer to PROCESS_INFORMATION structure
+    ) 
+    {
+        printf( "CreateProcess failed (%d).\n", GetLastError() );
+        return NULL;
+    }
+
+	printf("Process Id:%d.\n",pi.dwProcessId);
+    // Wait until child process exits.
+	IdentifyProcess(pi.dwProcessId);
+    WaitForSingleObject( pi.hProcess, INFINITE );
+
+    // Close process and thread handles. 
+    CloseHandle( pi.hProcess );
+    CloseHandle( pi.hThread );
+
+return pi.dwProcessId;
+}
+
+
+int main(int argc, TCHAR *argv[])
+{
+
+//Step 0: Create Process
+char processName [] = "C:\\WINDOWS\\system32\\notepad.exe C:\\sado.txt";
+DWORD  pid = createProcessExample(processName);
+
+// Step 1:
+//Initialization part-> All pages belongs to process
+//should be started with only read and execute permissions.
+
+
+//Step 2:
+//Packet malware can decompress itself. 
+//Write and Read permissions should be granted to new allocated these new pages.
+
+
+//Step 3:
+//If Page fault occurs, check original permissions and grant either X or W permission to page.
+
+
+//Step 4: 
+//Hooking System Calls
+
+
+//Step 5:
+//In case dangerous syscalls, terminate process and dump the content.
+
+
+//shellcodeexample();
 //getSystemInfoExample();
 //GetListofProcessIdentifiers();
 //system ("start notepad");
-virtualAllocExample();
-
-
-  
+//virtualAllocExample();
+//exceptionExample();
+//exceptionExample2();
+//exceptionExample3();
+  puts("MAIN");
   std::cin.get();
   std::cin.ignore();
   return 0;
