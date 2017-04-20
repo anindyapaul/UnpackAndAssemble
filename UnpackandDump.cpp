@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <iostream>
+#include <string>
 #include <stdlib.h>
 #include <tchar.h>
 #include <psapi.h>
@@ -8,171 +9,11 @@
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "psapi.lib")
 using namespace std;
-//using namespace System;
 
-void getSystemInfoExample()
-{
-   SYSTEM_INFO siSysInfo;
- 
-   // Copy the hardware information to the SYSTEM_INFO structure. 
- 
-   GetSystemInfo(&siSysInfo); 
- 
-   // Display the contents of the SYSTEM_INFO structure. 
+//Globals
+DWORD dwPageSize = 4096;
+LPTSTR lpNxtPage;               // Address of the next page to ask for
 
-   printf("Hardware information: \n");  
-   printf("  OEM ID: %u\n", siSysInfo.dwOemId);
-   printf("  Number of processors: %u\n", 
-      siSysInfo.dwNumberOfProcessors); 
-   printf("  Page size: %u\n", siSysInfo.dwPageSize); 
-   printf("  Processor type: %u\n", siSysInfo.dwProcessorType); 
-   printf("  Minimum application address: %lx\n", 
-      siSysInfo.lpMinimumApplicationAddress); 
-   printf("  Maximum application address: %lx\n", 
-      siSysInfo.lpMaximumApplicationAddress); 
-   printf("  Active processor mask: %u\n", 
-      siSysInfo.dwActiveProcessorMask); 
-}
-
-
-
-void shellcodeexample(){
-	//www.dreamincode.net/forums/topic/156507-using-virtualalloc-virtualprotect-and-virtualfree
-
-/* In the beginning we'll have to define the function pointer.  */ 
-/* I called the function 'dyncode' and gave it an int argument  */ 
-/* as well as an int return value just to show what's possible. */ 
- 
-int (*dyncode)(int);  /* prototype for call of dynamic code */ 
- 
-/* The following char array is initialized with some binary code */ 
-/* which takes the first argument from the stack, increases it,  */ 
-/* and returns to the caller.                                    */ 
-/* Just very simple code for testing purposes...                 */ 
- 
-unsigned char code[] = {0x8B,0x44,0x24,0x04,  /* mov eax, [esp+4] */ 
-                        0x40,                 /* inc eax          */ 
-                        0xC3                  /* ret              */ 
-                       }; 
- 
-/* Include the prototypes of the functions we are using... */ 
-        /* To show you that the code can be dynamically generated    */ 
-        /* although I defined static data above, the code is copied  */ 
-        /* into an allocated memory area and the starting address is */ 
-        /* assigned to the function pointer 'dyncode'.               */ 
-        /* The strange stuff in front of the malloc is just to cast  */ 
-        /* the address to the same format the function pointer is    */ 
-        /* definded with, otherwise you'd get a compiler warning.    */ 
- 
-        dyncode = (int (*)(int)) VirtualAlloc(NULL, 4096,
-                                              MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
-        /* We now have a page of memory that is readable, writeable    */
-        /* and executable. so the memcpy will work without any         */
-        /* problems!                                                   */
-
-        memcpy(dyncode, code, sizeof(code)); 
- 
-        /* To show that the code works it is called with the argument 41 */ 
-        /* and the retval sould be 42, obviously.                        */ 
- 
-        /* This code will now execute correctly!                         */
-
-        printf("retval = %d\n", (*dyncode)(41) );  /* call the code and print the return value */   
-
-        /* Freeing the page allocated.                                   */
-
-        VirtualFree(dyncode, NULL, MEM_RELEASE);
-        return;
-}
-
-/* A program to demonstrate the use of guard pages of memory. Allocate
-   a page of memory as a guard page, then try to access the page. That
-   will fail, but doing so releases the lock on the guard page, so the
-   next access works correctly.
-
-   The output will look like this. The actual address may vary.
-
-   This computer has a page size of 4096.
-   Committed 4096 bytes at address 0x00520000
-   Cannot lock at 00520000, error = 0x80000001
-   2nd Lock Achieved at 00520000
-
-   This sample does not show how to use the guard page fault to
-   "grow" a dynamic array, such as a stack. */
-void virtualAllocExample(){
-  LPVOID lpvAddr,lpvAddr2;               // address of the test memory
-  DWORD dwPageSize;             // amount of memory to allocate.
-  BOOL bLocked;                 // address of the guarded memory
-  SYSTEM_INFO sSysInfo;         // useful information about the system
-
-  GetSystemInfo(&sSysInfo);     // initialize the structure
-
-  _tprintf(TEXT("This computer has page size %d.\n"), sSysInfo.dwPageSize);
-  dwPageSize = sSysInfo.dwPageSize;
-
-  // Try to allocate the memory.
-
-  lpvAddr = VirtualAlloc(NULL,    //system determines where to allocate region
-						 17*dwPageSize,
-                         MEM_RESERVE | MEM_COMMIT, // reserve and commit memory, no detail yet, should be fine for now
-                         PAGE_EXECUTE_READ );//| PAGE_GUARD
-
-  if(lpvAddr == NULL) {
-    _tprintf(TEXT("VirtualAlloc failed. Error: %ld\n"),
-             GetLastError());
-    return ;
-
-  } else {
-    _ftprintf(stderr, TEXT("Committed %lu Kbytes at address 0x%lp\n"),
-              17*dwPageSize/1024, lpvAddr);
-  }
-
-  // Try to allocate the memory for second time 
-
-    lpvAddr2 = VirtualAlloc(NULL,    //system determines where to allocate region
-						 4*dwPageSize,
-                         MEM_RESERVE | MEM_COMMIT, // reserve and commit memory, no detail yet, should be fine for now
-                         PAGE_EXECUTE_READ );//| PAGE_GUARD
-
-  if(lpvAddr2 == NULL) {
-    _tprintf(TEXT("VirtualAlloc failed. Error: %ld\n"),
-             GetLastError());
-    return ;
-
-  } else {
-    _ftprintf(stderr, TEXT("Committed %lu Kbytes at address 0x%lp\n"),
-              4*dwPageSize/1024, lpvAddr2);
-  }
-
-  // Try to lock the committed memory. This fails the first time 
-  // because of the guard page.
-
-  bLocked = VirtualLock(lpvAddr, dwPageSize);
-  if (!bLocked) {
-    _ftprintf(stderr, TEXT("Cannot lock at %lp, error = 0x%lx\n"),
-              lpvAddr, GetLastError());
-  } else {
-    _ftprintf(stderr, TEXT("Lock Achieved at %lp\n"), lpvAddr);
-  }
-
-  // Try to lock the committed memory again. This succeeds the second
-  // time because the guard page status was removed by the first 
-  // access attempt.
-
-  bLocked = VirtualLock(lpvAddr, dwPageSize);
-
-  if (!bLocked) {
-    _ftprintf(stderr, TEXT("Cannot get 2nd lock at %lp, error = %lx\n"),
-              lpvAddr, GetLastError());
-  } else {
-    _ftprintf(stderr, TEXT("2nd Lock Achieved at %lp\n"), lpvAddr);
-  }
-
-
-
-  return;
-}
 
 // exceptionExample 1
 
@@ -280,7 +121,26 @@ void exceptionExample3(){
 
 }
 
+//Returns the last Win32 error, in string format. Returns an empty string if there is no error.
+std::string GetLastErrorAsString()
+{//stackoverflow.com/questions/1387064/how-to-get-the-error-message-from-the-error-code-returned-by-getlasterror
+   
+	//Get the error message, if any.
+    DWORD errorMessageID = ::GetLastError();
+    if(errorMessageID == 0)
+        return std::string(); //No error message has been recorded
 
+    LPSTR messageBuffer = nullptr;
+    size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                                 NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
+
+    std::string message(messageBuffer, size);
+
+    //Free the buffer.
+    LocalFree(messageBuffer);
+
+    return message;
+}
 
 void PrintMemoryInfo( DWORD processID )
 {
@@ -321,40 +181,73 @@ void PrintMemoryInfo( DWORD processID )
     CloseHandle( hProcess );
 }
 
-void GetListofProcessIdentifiers( )
-{
-
-    DWORD aProcesses[1024]; 
-    DWORD cbNeeded; 
-    DWORD cProcesses;
-    unsigned int i;
-	
-    // Get the list of process identifiers.
-
-    if ( !EnumProcesses( aProcesses, sizeof(aProcesses), &cbNeeded ) )
-        return ;
-
-    // Calculate how many process identifiers were returned.
-
-    cProcesses = cbNeeded / sizeof(DWORD);
-
-    // Print the names of the modules for each process.
-
-    for ( i = 0; i < cProcesses; i++ )
-    {
-        PrintMemoryInfo( aProcesses[i] );
-    }
-
-    return;
-}
-
-
 void IdentifyProcess( DWORD pid )
 {
 	PrintMemoryInfo( pid );
     return;
 }
+
+
+VOID ErrorExit(LPTSTR lpMsg)
+{
+    _tprintf(TEXT("Error! %s with error code of %ld.\n"),
+             lpMsg, GetLastError ());
+    exit (0);
+}
  
+INT PageFaultExceptionFilter(DWORD dwCode,HANDLE hProcess)
+{
+    LPVOID lpvResult;
+	_tprintf(TEXT("Exception function running.\n"));
+    // If the exception is not a page fault, exit.
+
+    if (dwCode != EXCEPTION_ACCESS_VIOLATION)
+    {
+        _tprintf(TEXT("Exception code = %d.\n"), dwCode);
+        return EXCEPTION_EXECUTE_HANDLER;
+    }
+
+    _tprintf(TEXT("Exception is a page fault.\n"));
+
+    // If the reserved pages are used up, exit.
+
+  /*  if (dwPages >= PAGELIMIT)
+    {
+        _tprintf(TEXT("Exception: out of pages.\n"));
+        return EXCEPTION_EXECUTE_HANDLER;
+    }
+	*/
+
+    // Otherwise, commit another page.
+
+    lpvResult = VirtualAllocEx(hProcess,
+                     (LPVOID) lpNxtPage, // Next page to commit
+                     dwPageSize,         // Page size, in bytes
+                     MEM_COMMIT,         // Allocate a committed page
+                     PAGE_READWRITE);    // Read/write access
+    if (lpvResult == NULL )
+    {
+        _tprintf(TEXT("VirtualAlloc failed.\n"));
+        return EXCEPTION_EXECUTE_HANDLER;
+    }
+    else
+    {
+        _tprintf(TEXT("Allocating another page.\n"));
+    }
+
+    // Increment the page count, and advance lpNxtPage to the next page.
+
+//    dwPages++;
+    lpNxtPage = (LPTSTR) ((PCHAR) lpNxtPage + dwPageSize);
+
+    // Continue execution where the page fault occurred.
+
+    return EXCEPTION_CONTINUE_EXECUTION;
+}
+
+
+
+// Create Process
 
 DWORD createProcessExample(char *processName){
 	
@@ -372,7 +265,7 @@ DWORD createProcessExample(char *processName){
         NULL,           // Process handle not inheritable
         NULL,           // Thread handle not inheritable
         FALSE,          // Set handle inheritance to FALSE
-        0,              // No creation flags
+        0,              // CREATE_SUSPENDED =4
         NULL,           // Use parent's environment block
         NULL,           // Use parent's starting directory 
         &si,            // Pointer to STARTUPINFO structure
@@ -384,10 +277,54 @@ DWORD createProcessExample(char *processName){
     }
 
 	printf("Process Id:%d.\n",pi.dwProcessId);
-    // Wait until child process exits.
+    
 	IdentifyProcess(pi.dwProcessId);
-    WaitForSingleObject( pi.hProcess, INFINITE );
 
+	// Allocate memory to process
+
+	LPVOID lpvBase= VirtualAllocEx(pi.hProcess,
+				    NULL,
+				    5*4096,    // number of pages to be allocated
+					MEM_RESERVE ,//initially just reserved, if neccessary commit!!
+				    PAGE_EXECUTE_READ);// start with X and R permissions
+
+	if (lpvBase == NULL )
+        ErrorExit(TEXT("VirtualAlloc reserve failed."));
+	
+	
+	// Wait until child process exits.
+	WaitForSingleObject( pi.hProcess,5000 );//INFINITE, 5000ms
+
+	// change protection
+	int failornot;
+	DWORD dPermission=0;
+	LPTSTR lpPtr;                 // Generic character pointer
+	lpPtr = lpNxtPage = (LPTSTR) lpvBase;
+	//string lastError;
+	__try
+	{
+	failornot=VirtualProtectEx(pi.hProcess,
+					 lpvBase,
+					 2,
+					 PAGE_READWRITE,
+					 &dPermission);
+	 cout << "Dpermission: " << &dPermission << "failornot:" << failornot;
+	 //lastError = GetLastErrorAsString();
+	}
+	 __except( PageFaultExceptionFilter( GetExceptionCode(),pi.hProcess ) )
+	 {
+		 // This code is executed only if the filter function
+            // is unsuccessful in committing the next page.
+
+            _tprintf (TEXT("Exiting process.\n"));
+
+            ExitProcess( GetLastError() );
+	 }
+
+  //  cout << "GetLastError: " << lastError << ".";
+	printf("Process resumed");
+	//ResumeThread(pi.hThread);
+	IdentifyProcess(pi.dwProcessId);
     // Close process and thread handles. 
     CloseHandle( pi.hProcess );
     CloseHandle( pi.hThread );
@@ -400,6 +337,7 @@ int main(int argc, TCHAR *argv[])
 {
 
 //Step 0: Create Process
+//first part program name, second part argument
 char processName [] = "C:\\WINDOWS\\system32\\notepad.exe C:\\sado.txt";
 DWORD  pid = createProcessExample(processName);
 
