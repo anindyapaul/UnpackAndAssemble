@@ -1,0 +1,7 @@
+TARGETNAME=hookSSDTprog
+TARGETTYPE=DRIVER
+SOURCES=hookSSDTprog.c
+UMTYPE=console
+UMENTRY=DriverEntry
+
+
