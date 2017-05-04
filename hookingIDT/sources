@@ -1,0 +1,5 @@
+TARGETNAME=hookingidt
+TARGETTYPE=DRIVER
+SOURCES=hookingidt.c
+UMTYPE=console
+UMENTRY=DriverEntry
